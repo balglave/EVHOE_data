@@ -27,7 +27,9 @@ ylims <- range(pretty(Haul_df$lati))
 indiv_data <- Save_Datras$datras_sp.CA.full %>% 
   filter(scientificname == species)
 
-plot(indiv_data$LngtClass,indiv_data$IndWgt,main = "Length weight relaionship")
+plot(indiv_data$LngtClass,indiv_data$IndWgt,main = "Length weight relationship")
+
+write.csv(Save_Datras$datras_sp.CA.full,"donnes_evhoe.csv")
 
 # Catch data
 Catch_df <- Save_Datras$datras_sp.HL.full %>%
@@ -36,7 +38,7 @@ Catch_df <- Save_Datras$datras_sp.HL.full %>%
 
 # Join with haul data to add missing hauls to catch data
 Catch_df_2 <- full_join(Catch_df,Haul_df) %>%
-  filter(scientificname == "Argentina_sphyraena")
+  filter(scientificname == species)
 Catch_df_2$CatchWgt[which(is.na(Catch_df_2$CatchWgt))] <- 0
 
 # Plot
@@ -50,7 +52,7 @@ Evhoe_plot <- ggplot(Catch_df_2)+
   theme(axis.text.x = element_text(angle = 90),
         plot.title = element_text(hjust = 0.5,face = "bold",size=14),
         panel.spacing.x = unit(4, "mm"))+
-  ggtitle("Argentina sphyraena (EVHOE)")+
+  ggtitle(species)+
   ylab("")+xlab("")
 
 plot(Evhoe_plot)
