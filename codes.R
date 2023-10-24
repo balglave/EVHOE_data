@@ -10,6 +10,8 @@ library(sf)
 # Load EVHOE data
 load("EVHOE_2008_2019.RData")
 
+species <- "Solea_solea"
+
 # Load Map data
 mapBase <- map("worldHires", fill = T, plot = F)
 mapBase <- st_as_sf(mapBase) %>% filter(ID %in% c("France","Spain","UK","Ireland"))
@@ -21,6 +23,11 @@ Haul_df <- Save_Datras$datras_HH.full %>%
 # Extent of the EVHOE domain
 xlims <- range(pretty(Haul_df$long))
 ylims <- range(pretty(Haul_df$lati))
+
+indiv_data <- Save_Datras$datras_sp.CA.full %>% 
+  filter(scientificname == species)
+
+plot(indiv_data$LngtClass,indiv_data$IndWgt,main = "Length weight relaionship")
 
 # Catch data
 Catch_df <- Save_Datras$datras_sp.HL.full %>%
@@ -47,3 +54,5 @@ Evhoe_plot <- ggplot(Catch_df_2)+
   ylab("")+xlab("")
 
 plot(Evhoe_plot)
+
+# plot
