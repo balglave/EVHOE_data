@@ -1,0 +1,211 @@
+---
+title: "SAÉ 3-01-EMS Recueil et analyse de données par échantillonnage ou plan d'expérience"
+subtitle: "TP/TD Echantillonnage stratifié - Données EVHOE"
+author: "B. Alglave et L. Bellanger"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+library(mapdata)
+library(sampling)
+library(sf)
+
+```
+
+\underline{\textbf{Objectif du TD/TP:}} Estimer l'abondance de merlus à partir d'un sondage stratifié dans le Golfe de Gascogne et en Mer Celtique.
+
+Dans le cadre de l'études d'une population marine, les chercheurs estiment l'abondance d'une population (e.g. le nombre de merlus dans le Golfe de Gascogne et Mer Celtique en 2018) à partir d'un échantillon récolté de facon stratifié (Cf. théorie de l'estimation).
+
+Pour cela, ils réalisent chaque année des campagnes océanographiques qui permettent de récolter des données et d'obtenir des estimations de l'abondance.
+
+SCHEMA
+
+## Données
+
+Les données EVHOE (Evaluation Halieutique Ouest de l'Europe) sont des données échantillonnées chaque année en Octobre/Novembre. Cette campagne cible les espèces bentho-démersales du golfe de Gascogne (GdG) et de Mer Celtique (MC). L'échantillonnage est stratifié suivant les classes de profondeur et les grandes unités écologiques du GdG et de MC (voir le shapefile `Agreed_Strata_EVHOE_Polyg_WGS84.shp` et l'objet `evhoe_shp`).
+
+Les poissons sont échantillonnées à l'aide d'un chalut ; ils sont comptés, pesés, sexés pour tout ou partie du trait de chalut. Les données entre 2018 et 2019 sont stockés dans le fichier `EVHOE_2008_2019.RData`. Il est constitué de trois data frame:
+
+- `Save_Datras$datras_HH.full` regroupe les principales informations de chaque trait de chalut (e.g. localisation, période de relevé)
+
+  - Year: année
+  - long: longitude
+  - lati: latitude
+  - StNo: numéro de station
+  - HaulNo: numéro du trait de chalut
+  - Depth: profondeur
+
+- `Save_Datras$datras_sp.HL.full` regroupe le poids et les abondances sur l'ensemble d'un trait de chalut de chaque combinaison 'trait de chalut x espèce x classe de taille x sexe' (données ré-haussées)
+
+  - Year: année
+  - long: longitude
+  - lati: latitude
+  - StNo: numéro de station
+  - HaulNo: numéro du trait de chalut
+  - scientificname: nom scientifique
+  - LngtClass: classe de taille
+  - TotalNo: comptages (nombre d'individus par combinaison de facteur)
+
+- `Save_Datras$datras_sp.CA.full` regroupe les données de mesures individuelles d'un sous-échantillon du trait de chalut. Une ligne correspond à un individu. Ces données regroupent les données individuelles de taille, de poids, de sexe. Nous n'utiliserons pas ces données dans ce projet.
+
+![Récolte des données EVHOE.](images/evhoe.png){#id .class width=80%}
+
+
+## Chargement des données
+
+```{r}
+
+# Charger les données EVHOE et les strates de la campagne
+load("data/EVHOE_2008_2019.RData")
+evhoe_shp <- st_read("data/STRATES/Agreed_Strata_EVHOE_Polyg_WGS84.shp") %>% 
+  dplyr::select(STRATE)
+evhoe_shp$area_strata <- as.numeric(st_area(evhoe_shp))
+
+# Tracé de côte
+mapBase <- map("worldHires", fill = T, plot = F)
+mapBase <- st_as_sf(mapBase) %>% filter(ID %in% c("France","Spain","UK","Ireland"))
+
+# Espèce pour l'analyse
+species <- "Merluccius_merluccius"
+
+```
+
+## Aire géographique et strates de la campagne
+
+```{r,echo=F,include=F}
+
+xlims <- c(-12,0)
+ylims <- c(42,52)
+
+Strata_plot <- ggplot(evhoe_shp)+
+  geom_sf(aes(fill=STRATE))+
+  geom_sf(data=mapBase)+
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90),
+        plot.title = element_text(hjust = 0.5,face = "bold",size=14),
+        panel.spacing.x = unit(4, "mm"))+
+  ylab("")+xlab("")
+
+```
+
+
+```{r,fig.asp=1,fig.align='center',echo=F}
+
+plot(Strata_plot)
+
+```
+
+
+## Données de traits de chaluts
+
+```{r,echo=F,include=F}
+
+Haul_df <- Save_Datras$datras_HH.full %>%
+  dplyr::select(Year,long,lati,StNo,HaulNo,Depth)
+
+year_vec <- unique(Haul_df$Year)
+year_vec <- year_vec[order(year_vec)]
+n_year <- length(year_vec)
+
+# Converti en sf et jointure avec le shapefile EVHOE
+Haul_sf <- st_as_sf(Haul_df,coords=c("long","lati"),crs = st_crs(evhoe_shp))
+Haul_sf_2 <- st_intersection(Haul_sf,evhoe_shp)
+
+# Plot des points échantillonnés
+Haul_plot <- ggplot(Haul_sf_2)+
+  geom_sf(aes(col=STRATE))+
+  geom_sf(data=mapBase)+
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90),
+        plot.title = element_text(hjust = 0.5,face = "bold",size=14),
+        panel.spacing.x = unit(4, "mm"))+
+  ylab("")+xlab("")
+
+```
+
+```{r,fig.asp=1,fig.align='center',echo=F}
+
+plot(Haul_plot)
+
+```
+
+\newpage
+
+## Données de captures
+
+```{r,fig.asp=1,fig.align='center',echo=F,include=F}
+
+# Niveau d'aggrégation --> trait de chalut, espèce, classe de taille, sexe
+Catch_df <- Save_Datras$datras_sp.HL.full %>%
+  dplyr::select(Year,long,lati,StNo,HaulNo,scientificname,LngtClass,TotalNo) %>% 
+  group_by(Year,long,lati,StNo,HaulNo,scientificname) %>%
+  dplyr::summarise(TotalNo = sum(TotalNo))
+
+# Pivoter le tableau de données pour avoir les espèces en colonne
+Catch_df_2 <- full_join(Catch_df,Haul_df) %>%
+  mutate(haul_id = paste0(StNo,"-",HaulNo,"-",Year)) %>% 
+  tidyr::pivot_wider(names_from = scientificname,values_from = TotalNo)
+
+# Joindre avec le shapefile EVHOE
+Catch_sf_2 <- st_as_sf(Catch_df_2,
+                       coords = c("long","lati"),
+                       crs=st_crs(evhoe_shp)) %>% 
+  st_intersection(evhoe_shp)
+
+# Filtrer sur les espèces
+Catch_sf_3 <- Catch_sf_2 %>% 
+  select_at(vars(Year,StNo,HaulNo,STRATE,area_strata,contains(species)))
+colnames(Catch_sf_3)[which(colnames(Catch_sf_3) == species)] <- "TotalNo"
+Catch_sf_3$TotalNo[which(is.na(Catch_sf_3$TotalNo))] <- 0
+
+# Plot
+Evhoe_plot <- ggplot(Catch_sf_3)+
+  geom_sf(aes(col=TotalNo))+
+  scale_color_distiller(palette="Spectral",trans = 'log10')+
+  facet_wrap(.~Year)+
+  geom_sf(data=mapBase)+
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90),
+        plot.title = element_text(hjust = 0.5,face = "bold",size=14),
+        panel.spacing.x = unit(4, "mm"))+
+  ggtitle("Données de captures (en effectif)")+
+  ylab("")+xlab("")
+
+```
+
+```{r,fig.asp=1,fig.align='center',echo=F}
+
+plot(Evhoe_plot)
+
+```
+
+\newpage
+
+## Questions
+
+- Faire une analyse exploratoire des données et comprendre le lien entre les jeux de données.
+
+- Estimer l'abondance du merlu (le nombre total de merlu) pour chaque année à partir des données EVHOE. Représenter sur la même figure les estimations annuelles d'abondance et les intervalles de confiance associés.
+
+\textit{\underline{Indications:}} Pour chaque année, calculer une estimation de l'abondance et calculer l'écart-type associé avec les fonctions `HTstrata` et `varest` (Cf. TD/TP sampling). Les représenter simultanément sur le même graphique.
+
+- Evaluer la sensibilité des estimations à l'échelle de la stratification.
+
+\textit{\underline{Indications:}} par exemple, regrouper les strates suivant la zone géographique (e.g. regrouper les CC ensemble, pareil pour les autres zones); ou bien regrouper les strates par niveau de profondeur (e.g. regrouper ensemble les strates indicés par 6).
+
+- Calculer un indice d'abondance par classe de taille.
+
+\textit{\underline{Indications:}} en amont du code, retrouver les informations sur les classes de taille. Modifier le codes pour calculer un indice d'abondance par classe de taille et par année. Attention, il va faloir regrouper des classes de taille.
+
+- Calculer un indice d'abondance annuelle (aggrégée) pour les espèces suivantes: merlan (*Merlangius_merlangus*), aiglefin (*Melanogrammus_aeglefinus*), cardine (*Lepidorhombus_whiffiagonis*), grondin (*Chelidonichthys_cuculus*), maquereau (*Scomber_scombrus*) et sole (*Solea_solea*). Les indices de ces espèces sont-ils corrélés entre eux?
+
+\textit{\underline{Indications:}} laisser de côté l'année 2017. C'est une année où la campagne avait été partielle du fait de problèmes techniques.
+
+- Compte tenu des caractéristiques des données, commenter les limites de l'approche du calcul d'indice d'abondance par estimateur stratifié.
