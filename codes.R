@@ -96,15 +96,11 @@ plot(Evhoe_plot)
 ##------------------------------------------------------------
 ## Compute yearly stratified estimates of population abundance
 ##------------------------------------------------------------
-Catch_sf_4 <- Catch_sf_3 %>% 
-  filter(TotalNo > 0) %>% 
-  mutate(logTotNo = log(TotalNo))
-
 ## For each year, compute the abundance estimates
 for(i in 1:n_year){
   
   year_i <- year_vec[i]
-  Catch_sf_i <- Catch_sf_4 %>% 
+  Catch_sf_i <- Catch_sf_3 %>% 
     filter(Year == year_i)
   samp_per_strata <- Catch_sf_i %>% 
     data.frame() %>% 
@@ -113,10 +109,10 @@ for(i in 1:n_year){
     summarise(n = n())
   Catch_sf_i2 <- inner_join(Catch_sf_i,samp_per_strata)
   Est_Ab <- HTstrata(y = Catch_sf_i2$TotalNo,
-                     pik = Catch_sf_i2$n / (Catch_sf_i2$area_strata * 1e-6),
+                     pik = Catch_sf_i2$n / (Catch_sf_i2$area_strata),
                      strata = as.numeric(factor(Catch_sf_i2$STRATE)))
   Var_Est_Ab <- varest(Ys=Catch_sf_i2$TotalNo,
-                       pik=as.numeric(Catch_sf_i2$n / (Catch_sf_i2$area_strata * 1e-6)))
+                       pik=as.numeric(Catch_sf_i2$n / (Catch_sf_i2$area_strata)))
   
   if(i==1) strate_est_df_full <- data.frame(Year = year_i, Est = Est_Ab, Var_Est = Var_Est_Ab)
   if(i!=1){

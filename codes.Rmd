@@ -22,13 +22,13 @@ Dans le cadre de l'études d'une population marine, les chercheurs estiment l'ab
 
 Pour cela, ils réalisent chaque année des campagnes océanographiques qui permettent de récolter des données et d'obtenir des estimations de l'abondance.
 
-SCHEMA
+Ces données sont cruciales pour le suivi des espèces marines afin d'évaluer le bon état écologique des populations exploitées. Pour ce TP, nous allons étudier la campagne EVHOE dont un déscriptif est donné au lien: https://campagnes.flotteoceanographique.fr/series/8/fr/.
 
 ## Données
 
 Les données EVHOE (Evaluation Halieutique Ouest de l'Europe) sont des données échantillonnées chaque année en Octobre/Novembre. Cette campagne cible les espèces bentho-démersales du golfe de Gascogne (GdG) et de Mer Celtique (MC). L'échantillonnage est stratifié suivant les classes de profondeur et les grandes unités écologiques du GdG et de MC (voir le shapefile `Agreed_Strata_EVHOE_Polyg_WGS84.shp` et l'objet `evhoe_shp`).
 
-Les poissons sont échantillonnées à l'aide d'un chalut ; ils sont comptés, pesés, sexés pour tout ou partie du trait de chalut. Les données entre 2018 et 2019 sont stockés dans le fichier `EVHOE_2008_2019.RData`. Il est constitué de trois data frame:
+Les poissons sont échantillonnées à l'aide d'un chalut ; ils sont comptés, pesés, sexés pour tout ou partie du trait de chalut. Les données entre 2008 et 2019 sont stockés dans le fichier `EVHOE_2008_2019.RData`. Il est constitué de trois data frame:
 
 - `Save_Datras$datras_HH.full` regroupe les principales informations de chaque trait de chalut (e.g. localisation, période de relevé)
 
@@ -76,7 +76,7 @@ species <- "Merluccius_merluccius"
 
 ## Aire géographique et strates de la campagne
 
-```{r,echo=F,include=F}
+```{r}
 
 xlims <- c(-12,0)
 ylims <- c(42,52)
@@ -103,7 +103,7 @@ plot(Strata_plot)
 
 ## Données de traits de chaluts
 
-```{r,echo=F,include=F}
+```{r}
 
 Haul_df <- Save_Datras$datras_HH.full %>%
   dplyr::select(Year,long,lati,StNo,HaulNo,Depth)
@@ -139,7 +139,7 @@ plot(Haul_plot)
 
 ## Données de captures
 
-```{r,fig.asp=1,fig.align='center',echo=F,include=F}
+```{r,fig.asp=1,fig.align='center'}
 
 # Niveau d'aggrégation --> trait de chalut, espèce, classe de taille, sexe
 Catch_df <- Save_Datras$datras_sp.HL.full %>%
@@ -192,20 +192,37 @@ plot(Evhoe_plot)
 
 - Faire une analyse exploratoire des données et comprendre le lien entre les jeux de données.
 
-- Estimer l'abondance du merlu (le nombre total de merlu) pour chaque année à partir des données EVHOE. Représenter sur la même figure les estimations annuelles d'abondance et les intervalles de confiance associés.
+- Redonner l'expression d'un estimateur stratifié et sa variance. Faire le lien entre les notations de l'estimateur et les données du TP (par exemple à quoi correspondent $n_h$, $Y_i$, $h$ dans le cas d'application?).
+
+\textit{\underline{Indications:}} pour la taille des strates ($N_h$), on prendra la surface de la strate (variable `area_strata` dans le shapefile `evhoe_shp` et le data frame `Haul_sf_2`). Dans l'absolu, il faudrait prendre le nombre de poisson de chaque strate. Comme cette grandeur est inconnue, on suppose que l'aire de la strate est un proxy (une approximation) de la taille de la strate (i.e. de l'ensemble des poissons contenus dans la strate).
+
+- Ci-dessous l'abondance du merlu estimé pour l'année 2012 à l'aide des fonctions `HTstrata` et `varest`. En vous basant sur ces codes, estimer l'abondance de merlu pour chaque année. Représenter sur la même figure les estimations annuelles d'abondance et les intervalles de confiance associés.
 
 \textit{\underline{Indications:}} Pour chaque année, calculer une estimation de l'abondance et calculer l'écart-type associé avec les fonctions `HTstrata` et `varest` (Cf. TD/TP sampling). Les représenter simultanément sur le même graphique.
 
-- Evaluer la sensibilité des estimations à l'échelle de la stratification.
+```{r}
 
-\textit{\underline{Indications:}} par exemple, regrouper les strates suivant la zone géographique (e.g. regrouper les CC ensemble, pareil pour les autres zones); ou bien regrouper les strates par niveau de profondeur (e.g. regrouper ensemble les strates indicés par 6).
+Catch_sf_i <- Catch_sf_3 %>% 
+  filter(Year == 2012)
 
-- Calculer un indice d'abondance par classe de taille.
+samp_per_strata <- Catch_sf_i %>% 
+  data.frame() %>% 
+  dplyr::select(-geometry) %>% 
+  group_by(Year,STRATE) %>% 
+  summarise(n = n())
 
-\textit{\underline{Indications:}} en amont du code, retrouver les informations sur les classes de taille. Modifier le codes pour calculer un indice d'abondance par classe de taille et par année. Attention, il va faloir regrouper des classes de taille.
+Catch_sf_i2 <- inner_join(Catch_sf_i,samp_per_strata)
 
-- Calculer un indice d'abondance annuelle (aggrégée) pour les espèces suivantes: merlan (*Merlangius_merlangus*), aiglefin (*Melanogrammus_aeglefinus*), cardine (*Lepidorhombus_whiffiagonis*), grondin (*Chelidonichthys_cuculus*), maquereau (*Scomber_scombrus*) et sole (*Solea_solea*). Les indices de ces espèces sont-ils corrélés entre eux?
+Est_Ab <- HTstrata(y = Catch_sf_i2$TotalNo,
+                   pik = Catch_sf_i2$n / (Catch_sf_i2$area_strata),
+                   strata = as.numeric(factor(Catch_sf_i2$STRATE)))
 
-\textit{\underline{Indications:}} laisser de côté l'année 2017. C'est une année où la campagne avait été partielle du fait de problèmes techniques.
+Var_Est_Ab <- varest(Ys=Catch_sf_i2$TotalNo,
+                     pik=as.numeric(Catch_sf_i2$n / (Catch_sf_i2$area_strata)))
 
-- Compte tenu des caractéristiques des données, commenter les limites de l'approche du calcul d'indice d'abondance par estimateur stratifié.
+```
+
+
+- Evaluer l'impact de la stratification sur l'estimation de l'abondance du merlu.
+
+\textit{\underline{Indications:}} regrouper les strates suivant leur zone géographique \textit{i.e.} les strates doivent être regroupées suivant leur deux premières lettres (Cc, Cn, Cs, Gn, Gs). Calculer des estimations de l'abondance par année pour cette nouvelle stratification et comparer aux estimations précédentes. Pour regrouper les strates sous R, il est possible d'utiliser le package `stringr` (package d'opération sur les chaines de caractères).
