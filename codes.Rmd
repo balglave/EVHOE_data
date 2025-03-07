@@ -38,6 +38,7 @@ Les poissons sont échantillonnées à l'aide d'un chalut ; ils sont comptés, p
   - StNo: numéro de station
   - HaulNo: numéro du trait de chalut
   - Depth: profondeur
+  - Distance: distance parcourue pour un trait de chalut (en métres). Il y a des NA dans cette colonne (données manquantes). Dans ce cas, on prend la moyenne de la distance des autres traits de chaluts pour remplacer les NA.
 
 - `Save_Datras$datras_sp.HL.full` regroupe le poids et les abondances sur l'ensemble d'un trait de chalut de chaque combinaison 'trait de chalut x espèce x classe de taille x sexe' (données ré-haussées)
 
@@ -63,7 +64,12 @@ Les poissons sont échantillonnées à l'aide d'un chalut ; ils sont comptés, p
 load("data/EVHOE_2008_2019.RData")
 evhoe_shp <- st_read("data/STRATES/Agreed_Strata_EVHOE_Polyg_WGS84.shp") %>% 
   dplyr::select(STRATE)
-evhoe_shp$area_strata <- as.numeric(st_area(evhoe_shp))
+evhoe_shp$area_strata <- as.numeric(st_area(evhoe_shp)) # calcul de l'aire de chaque strate (en m²)
+
+# Regrouper les strates constituées de plusieurs polygones (Cn2)
+evhoe_shp <- evhoe_shp %>% 
+  group_by(STRATE) %>% 
+  summarise(area_strata = sum(area_strata))
 
 # Tracé de côte
 mapBase <- map("worldHires", fill = T, plot = F)
@@ -104,9 +110,14 @@ plot(Strata_plot)
 ## Données de traits de chaluts
 
 ```{r}
-
+# Pour le calcul de la taille de l'échantillon:
+# --> l'ouverture du chalut est de 10 m
+# l'aire balayé par le chalut correspond 
+# à la distance parcourue (Distance) x l'ouverture du chalut (10m)
 Haul_df <- Save_Datras$datras_HH.full %>%
-  dplyr::select(Year,long,lati,StNo,HaulNo,Depth)
+  dplyr::select(Year,long,lati,StNo,HaulNo,Depth,Distance) %>% 
+  mutate(Area_swept = Distance * 10) # aire chalutée par chaque trait de chalut
+Haul_df$Area_swept[which(is.na(Haul_df$Area_swept))] <- mean(Haul_df$Area_swept,na.rm = T)
 
 year_vec <- unique(Haul_df$Year)
 year_vec <- year_vec[order(year_vec)]
@@ -160,7 +171,7 @@ Catch_sf_2 <- st_as_sf(Catch_df_2,
 
 # Filtrer sur les espèces
 Catch_sf_3 <- Catch_sf_2 %>% 
-  select_at(vars(Year,StNo,HaulNo,STRATE,area_strata,contains(species)))
+  select_at(vars(Year,StNo,HaulNo,STRATE,area_strata,Area_swept,contains(species)))
 colnames(Catch_sf_3)[which(colnames(Catch_sf_3) == species)] <- "TotalNo"
 Catch_sf_3$TotalNo[which(is.na(Catch_sf_3$TotalNo))] <- 0
 
@@ -188,13 +199,36 @@ plot(Evhoe_plot)
 
 \newpage
 
+## Définition de la population statistique étudiée, les individus statistiques et la variable étudiée.
+
+De facon simple, il faut considérer que le **domaine d'étude** (= la "population statistique") est le Golfe de Gascogne/Mer Celtique (GdG/MC). 
+
+Sur ce domaine, les scientifiques réalisent des relevés en certains points géographiques (= trait de chalut). 
+
+Les **unités statistiques** de l'étude statistique sont les traits de chalut (dit autrement des points géographiques échantillonnés dans le GdG/MC).
+
+L'**échantillon** est donc constitué de l'ensemble des traits de chaluts qui ont été échantillonnés suivant un plan d'échantillonnage stratifié à allocation proportionnelle (i.e. nombre d'échantillon dans chaque strate est proportionnelle à l'aire de chaque strate). La stratification est basée sur les classes de profondeur et les grandes zones géographiques du GdG/MC. La **taille de l'échantillon** ($n$) correspond à la surface chalutée (`Swept_area`).
+
+La **taille de la population** ($N$) correspond à l'ensemble des traits de chaluts possible soit l'ensemble du domaine d'étude.
+
+**Attention**: le nombre de merlus ne sont pas les individus statistiques !
+
+Pour chaque trait de chalut on observe un effectif de merlu. Le nombre de merlu observé pour un trait de chalut est la **variable d'intérêt** ($y$).
+
+Le paramètre d'intérêt ($t_y$) est le nombre total de merlu sur le domaine d'étude.
+
+A partir de la variable d'intérêt, on peut formuler un estimateur de $t_y$ noté $\hat t_y$ et calculer l'estimations.
+
+Attention à bien différencier la population de merlu et la population statistique qui est ici étudiée (l'ensemble du GdG/MC dans lequel on échantillonne un ensemble de localisation = les traits de chaluts).
+
+
 ## Questions
 
-- Faire une analyse exploratoire des données et comprendre le lien entre les jeux de données.
+- Faire une analyse exploratoire des données (e.g. résumés statistiques de la variable étudiée, nombre de strate, représentation graphique de la variable étudiée) et comprendre le lien entre les jeux de données. Y a-t-il des données manquantes dans les data frames `Haul_df` et `Catch_df` ? Si oui, comment sont-elles imputées ?
 
-- Redonner l'expression d'un estimateur stratifié et sa variance. Faire le lien entre les notations de l'estimateur et les données du TP (par exemple à quoi correspondent $n_h$, $Y_i$, $h$ dans le cas d'application?).
+- Redonner l'expression d'un estimateur stratifié et sa variance pour le total ($\hat t_y$). Faire le lien entre les notations de l'estimateur et les données du TP (par exemple à quoi correspondent $n_h$, $Y_i$, $h$ dans le cas d'application?).
 
-\textit{\underline{Indications:}} pour la taille des strates ($N_h$), on prendra la surface de la strate (variable `area_strata` dans le shapefile `evhoe_shp` et le data frame `Haul_sf_2`). Dans l'absolu, il faudrait prendre le nombre de poisson de chaque strate. Comme cette grandeur est inconnue, on suppose que l'aire de la strate est un proxy (une approximation) de la taille de la strate (i.e. de l'ensemble des poissons contenus dans la strate).
+\textit{\underline{Indications:}} La taille de l'échantillon pour une strate $h$ correspond à la surface chalutée dans la strate donnée (`Area_swept`). Pour la taille d'une strate $h$ ($N_h$), on prendra la surface de la strate (variable `area_strata` dans le shapefile `evhoe_shp` et le data frame `Haul_sf_2`).
 
 - Ci-dessous l'abondance du merlu estimé pour l'année 2012 à l'aide des fonctions `HTstrata` et `varest`. En vous basant sur ces codes, estimer l'abondance de merlu pour chaque année. Représenter sur la même figure les estimations annuelles d'abondance et les intervalles de confiance associés.
 
@@ -209,16 +243,25 @@ samp_per_strata <- Catch_sf_i %>%
   data.frame() %>% 
   dplyr::select(-geometry) %>% 
   group_by(Year,STRATE) %>% 
-  summarise(n = n())
+  summarise(Area_swept_strata = sum(Area_swept))
 
 Catch_sf_i2 <- inner_join(Catch_sf_i,samp_per_strata)
 
 Est_Ab <- HTstrata(y = Catch_sf_i2$TotalNo,
-                   pik = Catch_sf_i2$n / (Catch_sf_i2$area_strata),
+                   pik = Catch_sf_i2$Area_swept_strata / (Catch_sf_i2$area_strata),
                    strata = as.numeric(factor(Catch_sf_i2$STRATE)))
 
 Var_Est_Ab <- varest(Ys=Catch_sf_i2$TotalNo,
-                     pik=as.numeric(Catch_sf_i2$n / (Catch_sf_i2$area_strata)))
+                     pik=as.numeric(Catch_sf_i2$Area_swept_strata / (Catch_sf_i2$area_strata)))
+
+## Estimation du total de l'abondance
+Est_Ab
+
+## Ecart type associé
+sqrt(Var_Est_Ab)
+
+## Coefficient de variation
+sqrt(Var_Est_Ab) / Est_Ab
 
 ```
 
